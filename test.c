@@ -8,6 +8,7 @@
 
 #include <openssl/evp.h>
 #include "vexof.h"
+int VeXOF_Reference(Keccak_HashInstance *instance_arg, uint8_t *data, size_t dataByteLen);
 
 #define NUM_XOF_BYTES 40000
 
@@ -96,7 +97,7 @@ void vexof(const uint8_t *pt_seed_array, int input_bytes, uint8_t *pt_output_arr
     Keccak_HashInitialize_SHAKE128(&hashInstance);
     Keccak_HashUpdate(&hashInstance, pt_seed_array, 8 * input_bytes);
 
-    VeXOF_Initialize(&vexofInstance, &hashInstance);
+    VeXOF_FromKeccak(&vexofInstance, &hashInstance);
     VeXOF_Squeeze(&vexofInstance, pt_output_array, output_bytes);
 }
 
@@ -166,7 +167,7 @@ int main()
 
         Keccak_HashInitialize_SHAKE128(&hashInstance);
         Keccak_HashUpdate(&hashInstance, pt_public_key_seed, 8 * 16);
-        VeXOF_Initialize(&vexofInstance, &hashInstance);
+        VeXOF_FromKeccak(&vexofInstance, &hashInstance);
         VeXOF_Squeeze(&vexofInstance, prng_output_public_c, 2048);
         VeXOF_Squeeze(&vexofInstance, &prng_output_public_c[2048], NUM_XOF_BYTES - 2048);
         testok = 1;

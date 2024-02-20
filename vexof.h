@@ -15,12 +15,11 @@ typedef struct
 {
     ALIGN(64)
     uint8_t states_data[1600];
-    uint32_t rate;
-    uint32_t byteIOIndex;
+    size_t rate;
+    size_t byteIOIndex;
 } VeXOF_Instance;
 
-int VeXOF_Initialize(VeXOF_Instance *vexof_instance, Keccak_HashInstance *keccak_instance);
+int VeXOF_FromKeccak(VeXOF_Instance *vexof_instance, const Keccak_HashInstance *keccak_instance);
 int VeXOF_Squeeze(VeXOF_Instance *vexof_instance, uint8_t *data, size_t dataByteLen);
-int VeXOF_Reference(Keccak_HashInstance *instance_arg, unsigned char *data, size_t dataByteLen);
 
 #endif
