@@ -2,7 +2,7 @@
 
 Vectorizable SHAKE eXtendable Output Function (XOF).
 
-In the squeezing phase, VeXOF creates 8 instances (called stripes) of SHAKE that operate indepenently.
+In the squeezing phase, VeXOF creates 4 or 8 instances (called stripes) of SHAKE that operate indepenently.
 The instances are distinguished by adding a single byte with the stripe number when transitioning
 from absorbing to squeezing state. The XOF output is composed of 8 bytes from stripe 0, then 8 bytes 
 from stripe 1 and so on up to 64 bytes before stripe 0 is used again. In this way, 8 parallel instances
@@ -64,4 +64,5 @@ to run the tests.
 
 ## Limitations
 
-In this version the length of the squeezed data (`data_out_length`) must a multiple of 64 bytes.
+In this version the length of the squeezed data (`data_out_length`) must a multiple 
+of 32 or 64 bytes depending on the number of stripes.
