@@ -34,11 +34,39 @@
 #endif
 
 /**
- * Convert filled Keccak instance to a VeXOF
+ * Prepare a new instance
  */
-int VeXOF_FromKeccak(VeXOF_Instance *vexof_instance, const Keccak_HashInstance *keccak_instance)
+
+int VeXOF_HashInitialize_SHAKE128(VeXOF_Instance *vexof_instance)
 {
-    check(!keccak_instance->sponge.squeezing);
+    vexof_instance->squeezing = 0;
+    return Keccak_HashInitialize_SHAKE128((Keccak_HashInstance *)vexof_instance);
+}
+
+int VeXOF_HashInitialize_SHAKE256(VeXOF_Instance *vexof_instance)
+{
+    vexof_instance->squeezing = 0;
+    return Keccak_HashInitialize_SHAKE256((Keccak_HashInstance *)vexof_instance);
+}
+
+/**
+ * Add bytes to instance
+ */
+int VeXOF_HashUpdate(VeXOF_Instance *vexof_instance, const uint8_t *data, size_t dataByteLen)
+{
+    check(!vexof_instance->squeezing);
+    return Keccak_HashUpdate((Keccak_HashInstance *)vexof_instance, data, 8 * dataByteLen);
+}
+
+/**
+ * Convert filled Keccak instance to a VeXOF. Not part of the API.
+ */
+int _VeXOF_HashFinal(VeXOF_Instance *vexof_instance)
+{
+    check(!vexof_instance->squeezing);
+
+    Keccak_HashInstance keccak_instance;
+    memcpy(&keccak_instance, (Keccak_HashInstance *)vexof_instance, sizeof(Keccak_HashInstance));
 
     KeccakWidth1600_SpongeInstance spongeInstance;
     uint8_t *states = &vexof_instance->states_data[0];
@@ -46,18 +74,14 @@ int VeXOF_FromKeccak(VeXOF_Instance *vexof_instance, const Keccak_HashInstance *
     uint64_t *s64 = (uint64_t *)spongeInstance.state;
 
     memset(vexof_instance, 0, sizeof(VeXOF_Instance));
-    vexof_instance->rate = keccak_instance->sponge.rate / 8;
+    vexof_instance->rate = keccak_instance.sponge.rate / 8;
     vexof_instance->byteIOIndex = 0;
 
     for (uint8_t stripe_idx = 0; stripe_idx < 8; stripe_idx++)
     {
-        memcpy(&spongeInstance, &keccak_instance->sponge, sizeof(KeccakWidth1600_SpongeInstance));
+        memcpy(&spongeInstance, &keccak_instance.sponge, sizeof(KeccakWidth1600_SpongeInstance));
         KeccakWidth1600_SpongeAbsorb(&spongeInstance, &stripe_idx, 1);
-        KeccakP1600_AddByte(spongeInstance.state, keccak_instance->delimitedSuffix, spongeInstance.byteIOIndex);
-        /* If the first bit of padding is at position rate-1, we need a whole new block for the second bit of padding */
-        // Consider vectorizing this case
-        if ((keccak_instance->delimitedSuffix >= 0x80) && (spongeInstance.byteIOIndex == (spongeInstance.rate / 8 - 1)))
-            KeccakP1600_Permute_24rounds(spongeInstance.state);
+        KeccakP1600_AddByte(spongeInstance.state, 0x1f, spongeInstance.byteIOIndex);
         KeccakP1600_AddByte(spongeInstance.state, 0x80, spongeInstance.rate / 8 - 1);
 
         for (int idx = 0; idx < 25; idx++)
@@ -87,6 +111,7 @@ int VeXOF_FromKeccak(VeXOF_Instance *vexof_instance, const Keccak_HashInstance *
     }
 #endif
 #endif
+    vexof_instance->squeezing = 1;
 
     return 0;
 }
@@ -100,6 +125,13 @@ int VeXOF_Squeeze(VeXOF_Instance *vexof_instance, uint8_t *data, size_t dataByte
     // TODO: Remove 64 byte limitation
 
     check(dataByteLen % 64 == 0);
+
+    if (!vexof_instance->squeezing)
+    {
+        int res = _VeXOF_HashFinal(vexof_instance);
+        if (res)
+            return res;
+    }
 
     uint8_t *states = &vexof_instance->states_data[0];
     uint32_t rateInBytes = vexof_instance->rate;

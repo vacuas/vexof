@@ -17,9 +17,33 @@ typedef struct
     uint8_t states_data[1600];
     size_t rate;
     size_t byteIOIndex;
+    int squeezing;
 } VeXOF_Instance;
 
-int VeXOF_FromKeccak(VeXOF_Instance *vexof_instance, const Keccak_HashInstance *keccak_instance);
+/**
+ * Functions to initialize the VeXOF sponge function instance used in SHAKExxx mode.
+ * @param  vexof_instance    Pointer to the hash instance to be initialized.
+ * @return KECCAK_SUCCESS if successful, KECCAK_FAIL otherwise.
+ */
+int VeXOF_HashInitialize_SHAKE128(VeXOF_Instance *vexof_instance);
+int VeXOF_HashInitialize_SHAKE256(VeXOF_Instance *vexof_instance);
+
+/**
+ * Function to give input data to be absorbed.
+ * @param  vexof_instance    Pointer to the VeXOF instance initialized by VeXOF_HashInitialize_SHAKExxx().
+ * @param  data              Pointer to the input data.
+ * @param  dataByteLen       The number of input bytes provided in the input data.
+ * @return KECCAK_SUCCESS if successful, KECCAK_FAIL otherwise.
+ */
+int VeXOF_HashUpdate(VeXOF_Instance *vexof_instance, const uint8_t *data, size_t dataByteLen);
+
+/**
+ * Function to squeeze output data.
+ * @param  vexof_instance    Pointer to the VeXOF instance initialized by VeXOF_HashInitialize_SHAKExxx().
+ * @param  data              Pointer to the buffer where to store the output data.
+ * @param  dataByteLen       The number of output bytes desired (must be a multiple of 64).
+ * @return KECCAK_SUCCESS if successful, KECCAK_FAIL otherwise.
+ */
 int VeXOF_Squeeze(VeXOF_Instance *vexof_instance, uint8_t *data, size_t dataByteLen);
 
 #endif

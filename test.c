@@ -73,8 +73,6 @@ void xkcp(const uint8_t *pt_seed_array, int input_bytes, uint8_t *pt_output_arra
     Keccak_HashInstance hashInstance;
     Keccak_HashInitialize_SHAKE128(&hashInstance);
     Keccak_HashUpdate(&hashInstance, pt_seed_array, 8 * input_bytes);
-    unsigned char idx = 0;
-    Keccak_HashUpdate(&hashInstance, &idx, 8);
     Keccak_HashFinal(&hashInstance, pt_output_array);
     Keccak_HashSqueeze(&hashInstance, pt_output_array, 8 * output_bytes);
 }
@@ -88,16 +86,30 @@ void vexof_ref(const uint8_t *pt_seed_array, int input_bytes, uint8_t *pt_output
     VeXOF_Reference(&hashInstance, pt_output_array, output_bytes);
 }
 
+void vexof_ref256(const uint8_t *pt_seed_array, int input_bytes, uint8_t *pt_output_array,
+                  int output_bytes)
+{
+    Keccak_HashInstance hashInstance;
+    Keccak_HashInitialize_SHAKE256(&hashInstance);
+    Keccak_HashUpdate(&hashInstance, pt_seed_array, 8 * input_bytes);
+    VeXOF_Reference(&hashInstance, pt_output_array, output_bytes);
+}
+
 void vexof(const uint8_t *pt_seed_array, int input_bytes, uint8_t *pt_output_array,
            int output_bytes)
 {
-    Keccak_HashInstance hashInstance;
     VeXOF_Instance vexofInstance;
+    VeXOF_HashInitialize_SHAKE128(&vexofInstance);
+    VeXOF_HashUpdate(&vexofInstance, pt_seed_array, input_bytes);
+    VeXOF_Squeeze(&vexofInstance, pt_output_array, output_bytes);
+}
 
-    Keccak_HashInitialize_SHAKE128(&hashInstance);
-    Keccak_HashUpdate(&hashInstance, pt_seed_array, 8 * input_bytes);
-
-    VeXOF_FromKeccak(&vexofInstance, &hashInstance);
+void vexof256(const uint8_t *pt_seed_array, int input_bytes, uint8_t *pt_output_array,
+              int output_bytes)
+{
+    VeXOF_Instance vexofInstance;
+    VeXOF_HashInitialize_SHAKE256(&vexofInstance);
+    VeXOF_HashUpdate(&vexofInstance, pt_seed_array, input_bytes);
     VeXOF_Squeeze(&vexofInstance, pt_output_array, output_bytes);
 }
 
@@ -155,6 +167,18 @@ int main()
             testok = 0;
             break;
         }
+
+    vexof256(pt_public_key_seed, 16, prng_output_public, NUM_XOF_BYTES);
+    vexof_ref256(pt_public_key_seed, 16, prng_output_public_c, NUM_XOF_BYTES);
+
+    for (int idx = 0; idx < NUM_XOF_BYTES; idx++)
+        if (prng_output_public[idx] != prng_output_public_c[idx])
+        {
+            printf("Test 256 Failed @ %d: %02x %02x\n", idx, prng_output_public[idx], prng_output_public_c[idx]);
+            testok = 0;
+            break;
+        }
+
     if (testok)
     {
         printf("Test ok\n");
@@ -162,14 +186,15 @@ int main()
 
     // Test multiple squeeze
     {
-        Keccak_HashInstance hashInstance;
-        VeXOF_Instance vexofInstance;
+        vexof(pt_public_key_seed, 16, prng_output_public, NUM_XOF_BYTES);
+        memset(prng_output_public_c, 0, NUM_XOF_BYTES);
 
-        Keccak_HashInitialize_SHAKE128(&hashInstance);
-        Keccak_HashUpdate(&hashInstance, pt_public_key_seed, 8 * 16);
-        VeXOF_FromKeccak(&vexofInstance, &hashInstance);
+        VeXOF_Instance vexofInstance;
+        VeXOF_HashInitialize_SHAKE128(&vexofInstance);
+        VeXOF_HashUpdate(&vexofInstance, pt_public_key_seed, 16);
         VeXOF_Squeeze(&vexofInstance, prng_output_public_c, 2048);
         VeXOF_Squeeze(&vexofInstance, &prng_output_public_c[2048], NUM_XOF_BYTES - 2048);
+
         testok = 1;
         for (int idx = 0; idx < NUM_XOF_BYTES; idx++)
             if (prng_output_public[idx] != prng_output_public_c[idx])
