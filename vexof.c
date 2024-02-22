@@ -4,20 +4,45 @@
  * Vectorized SHAKE XOF based on XKCP.
  *
  * 2024 Jan Adriaan Leegwater
+ * https://github.com/vacuas/vexof
  */
 
 #include "vexof.h"
 
+// Options
+#ifndef STRIPES
 #define STRIPES 8
+#endif
 
+/**
+ * Warning: Setting USE_AVX512 to 1 will not always improve the performance on AVX512 architectures.
+ * Whether is does depends on specifics of the application.
+ */
+#ifndef USE_AVX512
+#define USE_AVX512 __AVX512F__
+#endif
+
+#ifndef DEBUG
+#define check(x)      \
+    {                 \
+        if (!(x))     \
+            return 1; \
+    }
+#else
+#include <assert.h>
+#define check(x) assert(x)
+#endif
+
+// Sanity checks
 #if KeccakP1600_stateSizeInBytes != 200
 #error "KeccakP1600_stateSizeInBytes must be 200"
 #endif
 
-#ifndef USE_AVX512
-#define USE_AVX512 0
+#if STRIPES != 4 && STRIPES != 8
+#error "STRIPES must be 4 or 8"
 #endif
 
+#include <stdlib.h>
 #if __AVX2__
 #include "FIPS202-timesx/KeccakP-1600-times4-SnP.h"
 #if USE_AVX512
@@ -25,23 +50,9 @@
 #endif
 #endif
 
-#include <stdlib.h>
-
-#ifdef DEBUG
-#include <assert.h>
-#define check(x) assert(x)
-#else
-#define check(x)      \
-    {                 \
-        if (!(x))     \
-            return 1; \
-    }
-#endif
-
 /**
- * Prepare a new instance
+ * Create VeXOF instance
  */
-
 int VeXOF_HashInitialize_SHAKE128(VeXOF_Instance *vexof_instance)
 {
     vexof_instance->squeezing = 0;
@@ -64,7 +75,7 @@ int VeXOF_HashUpdate(VeXOF_Instance *vexof_instance, const uint8_t *data, size_t
 }
 
 /**
- * Convert filled Keccak instance to a VeXOF. Not part of the API.
+ * Convert filled Keccak instance to a VeXOF. Not part of the public API.
  */
 int _VeXOF_HashFinal(VeXOF_Instance *vexof_instance)
 {
@@ -126,7 +137,7 @@ int _VeXOF_HashFinal(VeXOF_Instance *vexof_instance)
 /**
  * Squeeze bytes in parallel.
  */
-int VeXOF_Squeeze(VeXOF_Instance *vexof_instance, uint8_t *data, size_t dataByteLen)
+int VeXOF_Squeeze(VeXOF_Instance *vexof_instance, uint64_t *data, size_t dataByteLen)
 {
     // Based on KeccakSponge.inc from the XKCP package
     // TODO: Remove (STRIPES * 8) bytes limitation
@@ -150,7 +161,7 @@ int VeXOF_Squeeze(VeXOF_Instance *vexof_instance, uint8_t *data, size_t dataByte
     uint32_t byteIOIndex = vexof_instance->byteIOIndex;
 
     i = 0;
-    curData = data;
+    curData = (uint8_t *)data;
     while (i < dataByteLen)
     {
         if ((byteIOIndex == stripeRate) && (dataByteLen - i >= stripeRate))

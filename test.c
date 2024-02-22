@@ -10,6 +10,7 @@
 #include "vexof.h"
 int VeXOF_Reference(Keccak_HashInstance *instance_arg, uint8_t *data, size_t dataByteLen);
 
+#define MAX_XOF_BYTES 4000000
 #define NUM_XOF_BYTES 40000
 
 #define TEST_NUM 2500
@@ -30,7 +31,7 @@ uint64_t ticks_overhead(void)
 #define ticks_overhead cpucycles_overhead
 #endif
 
-void print_results(const char *s, uint64_t *t, size_t tlenarg)
+void print_results(const char *s, uint64_t *t, size_t tlenarg, size_t numbytes)
 {
     static uint64_t overhead = -1;
 
@@ -63,7 +64,7 @@ void print_results(const char *s, uint64_t *t, size_t tlenarg)
            s, average / 1e3, stddef / average * 100);
 #else
     printf("%s\t- %.3f Kcycles, %.3f cpb (± %.1f %%)\n",
-           s, average / 1e3, average / (float)NUM_XOF_BYTES, stddef / average * 100);
+           s, average / 1e3, average / (float)numbytes, stddef / average * 100);
 #endif
 }
 
@@ -77,25 +78,25 @@ void xkcp(const uint8_t *pt_seed_array, int input_bytes, uint8_t *pt_output_arra
     Keccak_HashSqueeze(&hashInstance, pt_output_array, 8 * output_bytes);
 }
 
-void vexof_ref(const uint8_t *pt_seed_array, int input_bytes, uint8_t *pt_output_array,
+void vexof_ref(const uint8_t *pt_seed_array, int input_bytes, uint64_t *pt_output_array,
                int output_bytes)
 {
     Keccak_HashInstance hashInstance;
     Keccak_HashInitialize_SHAKE128(&hashInstance);
     Keccak_HashUpdate(&hashInstance, pt_seed_array, 8 * input_bytes);
-    VeXOF_Reference(&hashInstance, pt_output_array, output_bytes);
+    VeXOF_Reference(&hashInstance, (uint8_t *)pt_output_array, output_bytes);
 }
 
-void vexof_ref256(const uint8_t *pt_seed_array, int input_bytes, uint8_t *pt_output_array,
+void vexof_ref256(const uint8_t *pt_seed_array, int input_bytes, uint64_t *pt_output_array,
                   int output_bytes)
 {
     Keccak_HashInstance hashInstance;
     Keccak_HashInitialize_SHAKE256(&hashInstance);
     Keccak_HashUpdate(&hashInstance, pt_seed_array, 8 * input_bytes);
-    VeXOF_Reference(&hashInstance, pt_output_array, output_bytes);
+    VeXOF_Reference(&hashInstance, (uint8_t *)pt_output_array, output_bytes);
 }
 
-void vexof(const uint8_t *pt_seed_array, int input_bytes, uint8_t *pt_output_array,
+void vexof(const uint8_t *pt_seed_array, int input_bytes, uint64_t *pt_output_array,
            int output_bytes)
 {
     VeXOF_Instance vexofInstance;
@@ -104,7 +105,7 @@ void vexof(const uint8_t *pt_seed_array, int input_bytes, uint8_t *pt_output_arr
     VeXOF_Squeeze(&vexofInstance, pt_output_array, output_bytes);
 }
 
-void vexof256(const uint8_t *pt_seed_array, int input_bytes, uint8_t *pt_output_array,
+void vexof256(const uint8_t *pt_seed_array, int input_bytes, uint64_t *pt_output_array,
               int output_bytes)
 {
     VeXOF_Instance vexofInstance;
@@ -151,8 +152,9 @@ int main()
     memset(msg, 0, mlen);
 
     ALIGN(64)
-    uint8_t prng_output_public[NUM_XOF_BYTES] = {0};
-    uint8_t prng_output_public_c[NUM_XOF_BYTES] = {0};
+    uint64_t prng_output_public[MAX_XOF_BYTES / 8] = {0};
+    ALIGN(64)
+    uint64_t prng_output_public_c[MAX_XOF_BYTES / 8] = {0};
     uint64_t test_cycles[TEST_NUM];
 
     // Test against reference
@@ -163,7 +165,8 @@ int main()
     for (int idx = 0; idx < NUM_XOF_BYTES; idx++)
         if (prng_output_public[idx] != prng_output_public_c[idx])
         {
-            printf("Test Failed @ %d: %02x %02x\n", idx, prng_output_public[idx], prng_output_public_c[idx]);
+            printf("Test Failed @ %d: %02x %02x\n", idx, (uint8_t)prng_output_public[idx],
+                   (uint8_t)prng_output_public_c[idx]);
             testok = 0;
             break;
         }
@@ -174,7 +177,8 @@ int main()
     for (int idx = 0; idx < NUM_XOF_BYTES; idx++)
         if (prng_output_public[idx] != prng_output_public_c[idx])
         {
-            printf("Test 256 Failed @ %d: %02x %02x\n", idx, prng_output_public[idx], prng_output_public_c[idx]);
+            printf("Test 256 Failed @ %d: %02x %02x\n", idx, (uint8_t)prng_output_public[idx],
+                   (uint8_t)prng_output_public_c[idx]);
             testok = 0;
             break;
         }
@@ -193,15 +197,16 @@ int main()
         VeXOF_HashInitialize_SHAKE128(&vexofInstance);
         VeXOF_HashUpdate(&vexofInstance, pt_public_key_seed, 16);
         VeXOF_Squeeze(&vexofInstance, prng_output_public_c, 2048);
-        VeXOF_Squeeze(&vexofInstance, &prng_output_public_c[2048], NUM_XOF_BYTES - 2048);
+        VeXOF_Squeeze(&vexofInstance, &prng_output_public_c[2048 / 8], NUM_XOF_BYTES - 2048);
 
         testok = 1;
         for (int idx = 0; idx < NUM_XOF_BYTES; idx++)
-            if (prng_output_public[idx] != prng_output_public_c[idx])
+            if (((uint8_t *)prng_output_public)[idx] !=
+                ((uint8_t *)prng_output_public_c)[idx])
             {
-                printf("Squeeze test Failed @ %d: %02x %02x\n", idx, prng_output_public[idx], prng_output_public_c[idx]);
+                printf("Squeeze test Failed @ %d: %02x %02x\n", idx, (uint8_t)prng_output_public[idx],
+                       (uint8_t)prng_output_public_c[idx]);
                 testok = 0;
-                return 0;
                 break;
             }
         if (testok)
@@ -218,25 +223,25 @@ int main()
         test_cycles[count] = ticks();
         pt_public_key_seed[0] = count % 256;
         pt_public_key_seed[1] = count / 256;
-        hash_aes128(pt_public_key_seed, prng_output_public);
+        hash_aes128(pt_public_key_seed, (uint8_t *)prng_output_public);
     }
-    print_results("AES:\t", test_cycles, TEST_NUM);
+    print_results("AES:\t", test_cycles, TEST_NUM, NUM_XOF_BYTES);
 
     for (int count = 0; count < TEST_NUM; count++)
     {
         test_cycles[count] = ticks();
-        shake128(pt_public_key_seed, 16, prng_output_public, NUM_XOF_BYTES);
+        shake128(pt_public_key_seed, 16, (uint8_t *)prng_output_public, NUM_XOF_BYTES);
     }
-    print_results("openssl:", test_cycles, TEST_NUM);
+    print_results("openssl:", test_cycles, TEST_NUM, NUM_XOF_BYTES);
 
     for (int count = 0; count < TEST_NUM; count++)
     {
         test_cycles[count] = ticks();
         pt_public_key_seed[0] = count % 256;
         pt_public_key_seed[1] = count / 256;
-        xkcp(pt_public_key_seed, 16, prng_output_public, NUM_XOF_BYTES);
+        xkcp(pt_public_key_seed, 16, (uint8_t *)prng_output_public, NUM_XOF_BYTES);
     }
-    print_results("XKCP:\t", test_cycles, TEST_NUM);
+    print_results("XKCP:\t", test_cycles, TEST_NUM, NUM_XOF_BYTES);
 
     memset(prng_output_public, 0, NUM_XOF_BYTES);
     for (int count = 0; count < TEST_NUM; count++)
@@ -246,7 +251,7 @@ int main()
         pt_public_key_seed[1] = count / 256;
         vexof(pt_public_key_seed, 16, prng_output_public, NUM_XOF_BYTES);
     }
-    print_results("VeXOF:\t", test_cycles, TEST_NUM);
+    print_results("VeXOF:\t", test_cycles, TEST_NUM, NUM_XOF_BYTES);
 
     for (int count = 0; count < TEST_NUM; count++)
     {
@@ -255,5 +260,38 @@ int main()
         pt_public_key_seed[1] = count / 256;
         vexof_ref(pt_public_key_seed, 16, prng_output_public_c, NUM_XOF_BYTES);
     }
-    print_results("Reference:", test_cycles, TEST_NUM);
+    print_results("Reference:", test_cycles, TEST_NUM, NUM_XOF_BYTES);
+
+    // Compare various sizes
+    for (int bytes = 64; bytes < 10000; bytes *= 2)
+    {
+        printf("\nXOF squeeze %d bytes\n", bytes);
+
+        for (int count = 0; count < TEST_NUM; count++)
+        {
+            test_cycles[count] = ticks();
+            pt_public_key_seed[0] = count % 256;
+            pt_public_key_seed[1] = count / 256;
+            xkcp(pt_public_key_seed, 16, (uint8_t *)prng_output_public, bytes);
+        }
+        print_results("XKCP\t", test_cycles, TEST_NUM, bytes);
+
+        for (int count = 0; count < TEST_NUM; count++)
+        {
+            test_cycles[count] = ticks();
+            pt_public_key_seed[0] = count % 256;
+            pt_public_key_seed[1] = count / 256;
+            vexof_ref(pt_public_key_seed, 16, prng_output_public_c, bytes);
+        }
+        print_results("Reference", test_cycles, TEST_NUM, bytes);
+
+        for (int count = 0; count < TEST_NUM; count++)
+        {
+            test_cycles[count] = ticks();
+            pt_public_key_seed[0] = count % 256;
+            pt_public_key_seed[1] = count / 256;
+            vexof(pt_public_key_seed, 16, prng_output_public, bytes);
+        }
+        print_results("VeXOF:\t", test_cycles, TEST_NUM, bytes);
+    }
 }
