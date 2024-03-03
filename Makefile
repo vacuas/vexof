@@ -6,7 +6,8 @@ AVX512 := $(findstring  AVX512, $(shell gcc -march=$(ARCH) -dM -E - < /dev/null)
 
 CC = gcc
 CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -Wredundant-decls -Wshadow -Wvla -Wpointer-arith -O3 -march=$(ARCH) -mtune=$(ARCH) -Wno-unused-variable
-SRC = test.c cpucycles.c vexof.c reference.c
+SRC = test.c vexof.c reference.c
+HDRS = vexof.h
 LIBS = -lcrypto -lm
 
 SRC += FIPS202-timesx/KeccakHash.c FIPS202-timesx/SimpleFIPS202.c FIPS202-timesx/KeccakP-1600-opt64.c FIPS202-timesx/KeccakSponge.c
@@ -21,7 +22,7 @@ endif
 
 all: speed_test
 
-test: $(SRC) Makefile
+test: $(SRC) $(HDRS) Makefile
 	$(CC) $(CFLAGS) $(INC) $(SRC) -o test $(LIBS) -DDEBUG
 
 speed_test: test

@@ -2,11 +2,9 @@
 
 Vectorizable SHAKE eXtendable Output Function (XOF).
 
-In the squeezing phase, VeXOF creates 4 or 8 instances (called stripes) of SHAKE that operate indepenently.
-The instances are distinguished by adding a single byte with the stripe number when transitioning
-from absorbing to squeezing state. The XOF output is composed of 8 bytes from stripe 0, then 8 bytes 
-from stripe 1 and so on up to 32 / 64 bytes before stripe 0 is used again. In this way, 4 or 8 parallel instances
-of SHAKE can run vectorized resulting in a significant speedup of the XOF.
+The VeXOF squeeze is indexed and yields block of 136 or 168 bytes. This allows for 4 or 8
+parallel instances of SHAKE to operate indepenently. The instances are distinguished by adding a
+64 bit block numer before calling the SHAKE Finalize function.
 
 See `reference.c` for a pure SHAKE-only implementation.
 
@@ -18,11 +16,11 @@ Test ok
 Squeeze test ok
 
 XKCP and VeXOF compared to OpenSSL for 40000 bytes (2500 times)
-AES:            - 36.886 Kcycles, 0.922 cpb (± 297.4 %)
-openssl:        - 355.473 Kcycles, 8.887 cpb (± 11.7 %)
-XKCP:           - 342.078 Kcycles, 8.552 cpb (± 9.2 %)
-VeXOF:          - 134.597 Kcycles, 3.365 cpb (± 18.7 %)
-Reference:      - 375.682 Kcycles, 9.392 cpb (± 33.4 %)
+AES:            - 37.759 Kcycles, 0.944 cpb (± 341.0 %)
+openssl:        - 355.129 Kcycles, 8.878 cpb (± 10.8 %)
+XKCP:           - 343.159 Kcycles, 8.579 cpb (± 9.0 %)
+VeXOF:          - 139.730 Kcycles, 3.493 cpb (± 15.4 %)
+Reference:      - 368.596 Kcycles, 9.215 cpb (± 10.3 %)
 ```
 
 On Cascadelake (AVX512) the improvement is much more impressive:
@@ -31,23 +29,26 @@ Test ok
 Squeeze test ok
 
 XKCP and VeXOF compared to OpenSSL for 40000 bytes (2500 times)
-AES:            - 24.592 Kcycles, 0.615 cpb (± 434.2 %)
-openssl:        - 256.793 Kcycles, 6.420 cpb (± 18.7 %)
-XKCP:           - 238.101 Kcycles, 5.953 cpb (± 10.6 %)
-VeXOF:          - 32.133 Kcycles, 0.803 cpb (± 19.4 %)
-Reference:      - 259.059 Kcycles, 6.476 cpb (± 14.9 %)
+AES:            - 23.927 Kcycles, 0.598 cpb (± 361.7 %)
+openssl:        - 244.644 Kcycles, 6.116 cpb (± 11.2 %)
+XKCP:           - 238.065 Kcycles, 5.952 cpb (± 13.4 %)
+VeXOF:          - 39.148 Kcycles, 0.979 cpb (± 10.7 %)
+Reference:      - 268.700 Kcycles, 6.718 cpb (± 91.4 %)
 ```
 
 ## API
 
 See `test.c` for examples. The following code snippet illustrates the API:
 ```
-VeXOF_Instance vexofInstance;
-VeXOF_HashInitialize_SHAKE128(&vexofInstance);
-VeXOF_HashUpdate(&vexofInstance, seed, seed_length);
-VeXOF_Squeeze(&vexofInstance, data_out, data_out_length);
+void vexof(const uint8_t *seed, size_t input_bytes, uint8_t *output, int output_bytes)
+{
+    VeXOF_Instance vexofInstance;
+    VeXOF_HashInitialize(&vexofInstance);
+    VeXOF_HashUpdate(&vexofInstance, seed, input_bytes);
+    VeXOF_Squeeze(&vexofInstance, output, output_bytes);
+}
 ```
-where `data_out_length` is the desired output length in bytes. 
+where `output_bytes` is the desired output length in bytes. 
 
 `VeXOF_Squeeze` will switch VeXOF from the absorbing to the squeezing state on its first invocation.
 `VeXOF_HashUpdate` and `VeXOF_Squeeze` can be called an arbitray number of times.
@@ -62,5 +63,4 @@ to run the tests.
 
 ## Limitations
 
-In this version the length of the squeezed data (`data_out_length`) must a multiple 
-of 32 or 64 bytes depending on the number of stripes.
+In this version the length of the squeezed data must a multiple of 8 bytes.
