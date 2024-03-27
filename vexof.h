@@ -60,7 +60,7 @@ int VeXOF_HashUpdate(VeXOF_Instance *vexof_instance, const uint8_t *data, size_t
  * @param  num_bytes         The number of output bytes desired.
  * @return KECCAK_SUCCESS if successful, KECCAK_FAIL otherwise.
  */
-int VeXOF_Squeeze(VeXOF_Instance *vexof_instance, uint8_t *data, size_t num_bytes);
+int VeXOF_Squeeze(VeXOF_Instance *vexof_instance, uint64_t *data, size_t num_bytes);
 
 /**
  * Function to generate XOF data from a seed.
@@ -69,6 +69,6 @@ int VeXOF_Squeeze(VeXOF_Instance *vexof_instance, uint8_t *data, size_t num_byte
  * @param  output            Pointer to the buffer where to store the output data.
  * @param  output_bytes      The number of output bytes desired.
  */
-void vexof(const uint8_t *seed, size_t input_bytes, uint8_t *output, int output_bytes);
+void vexof(const uint8_t *seed, size_t input_bytes, uint64_t *output, size_t output_bytes);
 
 #endif

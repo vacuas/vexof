@@ -2,7 +2,7 @@
 
 Vectorizable SHAKE eXtendable Output Function (XOF).
 
-The VeXOF squeeze is indexed and yields block of 136 or 168 bytes. This allows for 4 or 8
+The VeXOF squeeze is indexed and yields blocks of 168 bytes for SHAKE128. This allows for 4 or 8
 parallel instances of SHAKE to operate indepenently. The instances are distinguished by adding a
 64 bit block numer before calling the SHAKE Finalize function.
 

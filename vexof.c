@@ -54,7 +54,7 @@ int VeXOF_HashUpdate(VeXOF_Instance *vexof_instance, const uint8_t *data, size_t
 /**
  * Squeeze bytes in parallel.
  */
-int VeXOF_Squeeze(VeXOF_Instance *vexof_instance, uint8_t *data, size_t num_bytes)
+int VeXOF_Squeeze(VeXOF_Instance *vexof_instance, uint64_t *data, size_t num_bytes)
 {
     check(num_bytes % 8 == 0);
 
@@ -85,7 +85,7 @@ int VeXOF_Squeeze(VeXOF_Instance *vexof_instance, uint8_t *data, size_t num_byte
     uint8_t *states = &vexof_instance->states_data[0];
     size_t last_idx = vexof_instance->index + num_bytes;
     uint64_t *states64 = (uint64_t *)states;
-    uint64_t *data64 = (uint64_t *)data;
+    uint64_t *data64 = data;
 
     // Squeeze bytes already created in a preceding invocation
     uint32_t mod_index = vexof_instance->index % (PARALLELISM * bytes_rate);
@@ -152,10 +152,25 @@ int VeXOF_Squeeze(VeXOF_Instance *vexof_instance, uint8_t *data, size_t num_byte
 /**
  * Generate XOF data from a seed.
  */
-void vexof(const uint8_t *seed, size_t input_bytes, uint8_t *output, int output_bytes)
+void vexof(const uint8_t *seed, size_t input_bytes, uint64_t *output, size_t output_bytes)
 {
-    VeXOF_Instance vexofInstance;
-    VeXOF_HashInitialize(&vexofInstance);
-    VeXOF_HashUpdate(&vexofInstance, seed, input_bytes);
-    VeXOF_Squeeze(&vexofInstance, output, output_bytes);
+    assert(input_bytes <= 152);
+
+    if (output_bytes > 168)
+    {
+        VeXOF_Instance vexofInstance;
+        VeXOF_HashInitialize(&vexofInstance);
+        VeXOF_HashUpdate(&vexofInstance, seed, input_bytes);
+        VeXOF_Squeeze(&vexofInstance, output, output_bytes);
+    }
+    else
+    {
+        Keccak_HashInstance keccak_instance;
+        Keccak_HashInitialize_SHAKE128(&keccak_instance);
+        Keccak_HashUpdate(&keccak_instance, seed, 8 * input_bytes);
+        // Add the block index
+        keccak_instance.sponge.byteIOIndex += 8;
+        Keccak_HashFinal(&keccak_instance, NULL);
+        Keccak_HashSqueeze(&keccak_instance, (uint8_t *)output, 8 * output_bytes);
+    }
 }
